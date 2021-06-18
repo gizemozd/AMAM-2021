@@ -1,7 +1,6 @@
 import time
 
 import numpy as np
-from numba import jit, cuda
 from scipy.integrate import odeint
 from lmfit import minimize, Parameters, report_fit
 import matplotlib.pyplot as plt
@@ -80,13 +79,13 @@ def upg_optimization(
             (xs[3] - r**2) * xs[5] + omega * (xs[4] - xs[1])
         # Output of the UPG: x_d
         return [h_d, y_d, v_d, m_d, x_d, z_d]
-    
-    
+
+
     def g(t, x0, ps):
         """ Solution to the ODEs."""
         x = odeint(f, x0, t, args=(ps,))
         return x
-   
+
     def residual(ps, ts, data):
         """ Objective function."""
         x0 = ps['h0'].value, ps['y0'].value, ps['v0'].value, ps['m0'].value, ps['x0'].value, ps['z0'].value
@@ -104,7 +103,7 @@ def upg_optimization(
             [ps['mu'].value, ps['omega'].value, ps['target'].value])
 
     param_result = np.empty_like((1, 1, 1))
-    optimization_result = np.array([])
+    optimization_result = np.empty_like(np.zeros((1,6)))
 
     dt = 0.001
 
@@ -131,7 +130,7 @@ def upg_optimization(
         params.add('m0', value=float(data[0, 3]), min=0, max=2, vary=True)
         params.add('x0', value=float(data[-1, 4]), min=-3, max=2, vary=True)
         params.add('z0', value=float(data[-1, 5]), min=-3, max=2, vary=True)
-        params.add('mu', value=0.15, min=-0.02, max=0.5)
+        params.add('mu', value=0.1, min=-0.1, max=0.5)
         params.add('omega', value=53, min=40, max=90)
         params.add('target', value=1.5, min=0, max=3)
         params.add('A', value=80, min=1, max=90, vary=True)
@@ -149,7 +148,7 @@ def upg_optimization(
                         result.params['z0'].value
                         )
 
-        final = g(duration, best_initial, result.params)[:, 4]
+        final = g(duration, best_initial, result.params)
 
         # Display fitting statistics
         report_fit(result)
@@ -161,7 +160,8 @@ def upg_optimization(
         )
 
         param_result = np.vstack((param_result, temp_param))
-        optimization_result = np.hstack((optimization_result, final))
+        optimization_result= np.append(optimization_result, final, axis=0)
+
         logging.info(
             "Param length: {}, Result length: {}".format(
                 len(param_result),
@@ -173,33 +173,34 @@ def upg_optimization(
     # utils.save_pickle(grooming_angles_optimization, '../data/opt_{}_{}'.format(key,name))
     # utils.save_pickle(grooming_params_optimization, '../data/param_{}_{}'.format(key,name))
 
-    logging.info("Optimization took: {}\n".format(time.time() - starting_time))
+    logging.info("Optimization took: {}\n".format((time.time() - starting_time)/3600))
 
     if show_fig:
 
-        utils.plot_style()
+        colors = utils.plot_style()
 
         fig, (ax1, ax2) = plt.subplots(nrows=2, sharex=True, figsize=(12, 8))
-        ax1.plot(grooming_angles[name][key], label='processed')
+        ax1.plot(grooming_angles[name][key], label='processed', c=colors[0])
         ax1.plot(
             utils.apply_filter(
-                grooming_angles_optimization[name][key]),
+                grooming_angles_optimization[name][key][:,4]),
             '--',
-            label='optimization')
+            label='optimization', c=colors[1])
         ax1.set_title('Regression versus Real Data ({} {})'.format(name, key))
-        ax1.set_xlabel('Joint Angles')
+        ax1.set_xlabel('Joint Angles (rad)')
         ax1.legend()
 
-        ax2.plot(grooming_params_optimization[name][key][:, 0], label='Amplitude')
-        ax2.plot(grooming_params_optimization[name][key][:, 1], label='Omega')
-        ax2.plot(grooming_params_optimization[name][key][:, 2], label='Target')
+        ax2.plot(grooming_params_optimization[name][key][:, 0], label='Amplitude', c=colors[2])
+        ax2.plot(grooming_params_optimization[name][key][:, 1], label='Omega', c=colors[3])
+        ax2.plot(grooming_params_optimization[name][key][:, 2], label='Target', c=colors[4])
         ax2.set_title('Control Parameters')
         ax2.set_xlabel('Time (msec)')
         ax2.set_ylabel('Control Signals')
         ax2.legend()
-
-        fig.savefig('../docs/paramresults_{}_{}.eps'.format(key,name))
-        plt.show()
+        try:
+            plt.savefig('../docs/paramresults_{}_{}.eps'.format(key,name))
+        except:
+            logging.ingo('File does not exist... Could not save')
 
         fig, ax1 = plt.subplots(figsize=(11, 6))
         ax1.plot(cost_values, label='loss')
@@ -207,7 +208,9 @@ def upg_optimization(
         ax1.set_xlabel('Iterations')
         ax1.set_ylabel('Loss values')
         ax1.legend()
-        fig.savefig('../docs/loss_{}_{}.eps'.format(key,name))
-        plt.show()
+        try:
+            plt.savefig('../docs/loss_{}_{}.eps'.format(key,name))
+        except:
+            logging.info('File does not exist... Could not save')
 
         return grooming_angles_optimization, grooming_params_optimization

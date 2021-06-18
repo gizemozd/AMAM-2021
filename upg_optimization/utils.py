@@ -1,5 +1,5 @@
-import os 
-import pickle 
+import os
+import pickle
 import glob
 
 import numpy as np
@@ -24,7 +24,7 @@ def plot_style():
     plt.rcParams['axes.labelsize'] = 12
     plt.rcParams['xtick.labelsize'] = 12
     plt.rcParams['ytick.labelsize'] = 12
-    
+
     plt.rcParams['axes.spines.right'] = False
     plt.rcParams['axes.spines.top'] = False
     plt.rcParams['axes.spines.left'] = True
